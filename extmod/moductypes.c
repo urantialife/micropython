@@ -275,7 +275,8 @@ STATIC mp_obj_t uctypes_struct_sizeof(size_t n_args, const mp_obj_t *args) {
     if (mp_obj_is_type(obj_in, &mp_type_bytearray)) {
         return mp_obj_len(obj_in);
     }
-    int layout_type = LAYOUT_NATIVE;
+    // Second argument can specify the layout type, native is a default
+    int layout_type = (n_args > 1) ? mp_obj_get_int(args[1]) : LAYOUT_NATIVE;
     // We can apply sizeof either to structure definition (a dict)
     // or to instantiated structure
     if (mp_obj_is_type(obj_in, &uctypes_struct_type)) {
@@ -291,6 +292,7 @@ STATIC mp_obj_t uctypes_struct_sizeof(size_t n_args, const mp_obj_t *args) {
             layout_type = mp_obj_get_int(args[1]);
         }
     }
+    mp_uint_t max_field_size = 0;
     mp_uint_t size = uctypes_struct_size(obj_in, layout_type, &max_field_size);
     return MP_OBJ_NEW_SMALL_INT(size);
 }
