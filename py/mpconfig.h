@@ -458,6 +458,11 @@
 /*****************************************************************************/
 /* Python internal features                                                  */
 
+// Whether to provide access to the currently running function/generator code state.
+#ifndef MICROPY_ACCESS_CODE_STATE
+#define MICROPY_ACCESS_CODE_STATE (0)
+#endif
+
 // Whether to enable import of external modules
 // When disabled, only importing of built-in modules is supported
 // When enabled, a port must implement mp_import_stat (among other things)
@@ -1156,6 +1161,16 @@ typedef double mp_float_t;
 // Whether to provide "sys.exit" function
 #ifndef MICROPY_PY_SYS_EXIT
 #define MICROPY_PY_SYS_EXIT (1)
+#endif
+
+// Whether to provide "sys.uatexit" function
+#ifndef MICROPY_PY_SYS_UATEXIT
+#define MICROPY_PY_SYS_UATEXIT (0)
+#endif
+
+// Whether to provide "sys.settrace" function
+#ifndef MICROPY_PY_SYS_TRACE
+#define MICROPY_PY_SYS_TRACE (0)
 #endif
 
 // Whether to provide "sys.getsizeof" function

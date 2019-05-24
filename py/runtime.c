@@ -118,6 +118,16 @@ void mp_init(void) {
     MP_STATE_VM(vfs_mount_table) = NULL;
     #endif
 
+    #if MICROPY_PY_SYS_UATEXIT
+    MP_STATE_VM(exitfunc) = mp_const_none;
+    #endif
+
+    #if MICROPY_PY_SYS_TRACE
+    MP_STATE_THREAD(prof_trace_callback) = NULL;
+    MP_STATE_THREAD(prof_callback_is_executing) = false;
+    MP_STATE_THREAD(prof_code_state) = NULL;
+    #endif
+
     #if MICROPY_PY_THREAD_GIL
     mp_thread_mutex_init(&MP_STATE_VM(gil_mutex));
     #endif
