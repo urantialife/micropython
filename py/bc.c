@@ -385,20 +385,20 @@ STATIC const byte opcode_format_table[64] = {
 uint mp_opcode_format(const byte *ip, size_t *opcode_size) {
     uint f = (opcode_format_table[*ip >> 2] >> (2 * (*ip & 3))) & 3;
     const byte *ip_start = ip;
+    int extra_byte = (
+        *ip == MP_BC_RAISE_VARARGS
+        || *ip == MP_BC_MAKE_CLOSURE
+        || *ip == MP_BC_MAKE_CLOSURE_DEFARGS
+        #if MICROPY_OPT_CACHE_MAP_LOOKUP_IN_BYTECODE
+        || *ip == MP_BC_LOAD_NAME
+        || *ip == MP_BC_LOAD_GLOBAL
+        || *ip == MP_BC_LOAD_ATTR
+        || *ip == MP_BC_STORE_ATTR
+        #endif
+    );
     if (f == MP_OPCODE_QSTR) {
-        ip += 3;
+        ip += 3 + extra_byte;
     } else {
-        int extra_byte = (
-            *ip == MP_BC_RAISE_VARARGS
-            || *ip == MP_BC_MAKE_CLOSURE
-            || *ip == MP_BC_MAKE_CLOSURE_DEFARGS
-            #if MICROPY_OPT_CACHE_MAP_LOOKUP_IN_BYTECODE
-            || *ip == MP_BC_LOAD_NAME
-            || *ip == MP_BC_LOAD_GLOBAL
-            || *ip == MP_BC_LOAD_ATTR
-            || *ip == MP_BC_STORE_ATTR
-            #endif
-        );
         ip += 1;
         if (f == MP_OPCODE_VAR_UINT) {
             while ((*ip++ & 0x80) != 0) {
