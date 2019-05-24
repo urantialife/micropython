@@ -34,6 +34,7 @@
 #include "py/emitglue.h"
 #include "py/runtime0.h"
 #include "py/bc.h"
+#include "py/profiling.h"
 
 #if MICROPY_DEBUG_VERBOSE // print debugging info
 #define DEBUG_PRINT (1)
@@ -52,6 +53,9 @@ mp_uint_t mp_verbose_flag = 0;
 mp_raw_code_t *mp_emit_glue_new_raw_code(void) {
     mp_raw_code_t *rc = m_new0(mp_raw_code_t, 1);
     rc->kind = MP_CODE_RESERVED;
+    #if MICROPY_PY_SYS_TRACE
+    rc->line_of_definition = 0;
+    #endif
     return rc;
 }
 
@@ -74,12 +78,33 @@ void mp_emit_glue_assign_bytecode(mp_raw_code_t *rc, const byte *code,
     rc->data.u_byte.n_obj = n_obj;
     rc->data.u_byte.n_raw_code = n_raw_code;
     #endif
+    
+    #if MICROPY_PY_SYS_TRACE
+    mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
+    prof_extract_prelude(code, prelude);
+    
+    #if 0
+    prelude->bytecode = rc->data.u_byte.bytecode;
+    if (prelude->bytecode != rc->data.u_byte.bytecode) {
+        mp_printf(&mp_plat_print, "prelude->bytecode != rc->data.u_byte.bytecode; %p != %p\n", prelude->bytecode, rc->data.u_byte.bytecode);
+        mp_obj_t o = mp_obj_new_code(rc);
+        mp_obj_print_helper(&mp_plat_print, o, PRINT_STR);
+        mp_printf(&mp_plat_print, "\n");
+
+    }
+    for(int i =0; i<len; i++) {
+        // size_t bc = prelude->bytecode - prelude->code_info_size - prelude->code_info + i;
+        size_t bc = i;
+        mp_printf(&mp_plat_print, "bc:%d line:%d\n", i, prof_bytecode_lineno(rc, bc));
+    }
+    #endif
+    #endif
 
 #ifdef DEBUG_PRINT
     DEBUG_printf("assign byte code: code=%p len=" UINT_FMT " flags=%x\n", code, len, (uint)scope_flags);
 #endif
 #if MICROPY_DEBUG_PRINTERS
-    if (mp_verbose_flag >= 2) {
+    if (mp_verbose_flag >= 2 || 0) {
         mp_bytecode_print(rc, code, len, const_table);
     }
 #endif
@@ -146,6 +171,13 @@ mp_obj_t mp_make_function_from_raw_code(const mp_raw_code_t *rc, mp_obj_t def_ar
             // rc->kind should always be set and BYTECODE is the only remaining case
             assert(rc->kind == MP_CODE_BYTECODE);
             fun = mp_obj_new_fun_bc(def_args, def_kw_args, rc->data.u_byte.bytecode, rc->data.u_byte.const_table);
+
+            #if MICROPY_PY_SYS_TRACE
+            mp_obj_fun_bc_t *self_fun = (mp_obj_fun_bc_t *)MP_OBJ_TO_PTR(fun);
+            self_fun->rc = rc;
+            self_fun->line_of_definition = MP_OBJ_NEW_SMALL_INT(rc->line_of_definition);
+            #endif
+
             break;
     }
 

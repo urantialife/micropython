@@ -28,6 +28,26 @@
 
 #include "py/obj.h"
 
+#if MICROPY_PY_SYS_TRACE
+typedef struct _mp_bytecode_prelude_t {
+    uint n_state;
+    uint n_exc_stack;
+    uint scope_flags;
+    uint n_pos_args;
+    uint n_kwonly_args;
+    uint n_def_pos_args;
+    // const char* source_file;
+    qstr qstr_source_file;
+    // const char* block_name;
+    qstr qstr_block_name;
+    const byte* code_info;
+    size_t code_info_size;
+    const byte* line_info;
+    const byte* locals;
+    const byte* bytecode;
+} mp_bytecode_prelude_t;
+#endif
+
 // These variables and functions glue the code emitters to the runtime.
 
 typedef enum {
@@ -43,6 +63,7 @@ typedef struct _mp_raw_code_t {
     mp_uint_t kind : 3; // of type mp_raw_code_kind_t
     mp_uint_t scope_flags : 7;
     mp_uint_t n_pos_args : 11;
+    mp_uint_t line_of_definition;
     union {
         struct {
             const byte *bytecode;
@@ -51,6 +72,9 @@ typedef struct _mp_raw_code_t {
             mp_uint_t bc_len;
             uint16_t n_obj;
             uint16_t n_raw_code;
+            #endif
+            #if MICROPY_PY_SYS_TRACE
+            mp_bytecode_prelude_t prelude;
             #endif
         } u_byte;
         struct {

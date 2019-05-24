@@ -135,6 +135,11 @@ typedef struct _mp_state_vm_t {
     // dictionary with loaded modules (may be exposed as sys.modules)
     mp_obj_dict_t mp_loaded_modules_dict;
 
+    #if MICROPY_PY_SYS_UATEXIT
+    // exposed through sys.uatexit function
+    mp_obj_t exitfunc;
+    #endif
+
     // pending exception object (MP_OBJ_NULL if not pending)
     volatile mp_obj_t mp_pending_exception;
 
@@ -219,6 +224,14 @@ typedef struct _mp_state_vm_t {
 typedef struct _mp_state_thread_t {
     mp_obj_dict_t *dict_locals;
     mp_obj_dict_t *dict_globals;
+
+    #if MICROPY_PY_SYS_TRACE
+    mp_obj_t prof_trace_callback;
+    bool prof_callback_is_executing;
+    #endif // MICROPY_PY_SYS_TRACE
+    #if MICROPY_ACCESS_CODE_STATE
+    struct _mp_code_state_t *prof_code_state;
+    #endif // MICROPY_ACCESS_CODE_STATE
 
     nlr_buf_t *nlr_top; // ROOT POINTER
 
