@@ -34,6 +34,7 @@
 #include "py/runtime.h"
 #include "py/bc0.h"
 #include "py/bc.h"
+#include "py/profiling.h"
 
 #if 0
 #define TRACE(ip) printf("sp=%d ", (int)(sp - &code_state->state[0] + 1)); mp_bytecode_print2(ip, 1, code_state->fun_bc->const_table);
@@ -110,6 +111,64 @@
     exc_sp--; /* pop back to previous exception handler */ \
     CLEAR_SYS_EXC_INFO() /* just clear sys.exc_info(), not compliant, but it shouldn't be used in 1st place */
 
+#if MICROPY_ACCESS_CODE_STATE
+#define FRAME_SETUP() do { \
+    MP_STATE_THREAD(prof_code_state) = code_state; \
+} while(0)
+#else
+#define FRAME_SETUP()
+#endif
+
+#if MICROPY_PY_SYS_TRACE
+
+#define FRAME_ENTER() do { \
+    assert(code_state != code_state->prev_state); \
+    code_state->prev_state = MP_STATE_THREAD(prof_code_state); \
+    assert(code_state != code_state->prev_state); \
+} while(0)
+
+#define FRAME_LEAVE() do { \
+    assert(code_state != code_state->prev_state); \
+    MP_STATE_THREAD(prof_code_state) = code_state->prev_state; \
+    assert(code_state != code_state->prev_state); \
+} while(0)
+
+#define FRAME_SNAPSHOT() do { \
+    assert(code_state != code_state->prev_state); \
+    assert(MP_STATE_THREAD(prof_code_state) == code_state); \
+    if (!prof_is_executing) { \
+        const byte *tmp_ip = code_state->ip; mp_obj_t *tmp_sp = code_state->sp; \
+        code_state->ip = ip; code_state->sp = sp; \
+        code_state->frame = MP_OBJ_TO_PTR(prof_update_frame(code_state->frame, code_state)); \
+        code_state->ip = tmp_ip; code_state->sp = tmp_sp; \
+    } \
+} while(0)
+
+    #if PROF_PRINT_INSTR
+    #define PRINT_INSTR(cIp) prof_print_instr((cIp), code_state)
+    #else
+    #define PRINT_INSTR(cIp)
+    #endif
+
+#define TRACE_TICK(cIp, cSp, isException) do { \
+    assert(code_state != code_state->prev_state); \
+    assert(MP_STATE_THREAD(prof_code_state) == code_state); \
+    if (!prof_is_executing && code_state->frame && code_state->frame->callback) { \
+        PRINT_INSTR(code_state->ip); \
+        const byte *tmp_ip = code_state->ip; mp_obj_t *tmp_sp = code_state->sp; \
+        /* code_state->ip = cIp; code_state->sp = cSp; */ \
+        prof_instr_tick(code_state, isException); \
+        code_state->ip = tmp_ip; code_state->sp = tmp_sp; \
+    } \
+} while(0)
+
+#else // MICROPY_PY_SYS_TRACE
+#define FRAME_ENTER()
+#define FRAME_LEAVE()
+#define FRAME_SNAPSHOT()
+#define TRACE_TICK(cIp, cSp, isException)
+#endif // MICROPY_PY_SYS_TRACE
+
 // fastn has items in reverse order (fastn[0] is local[0], fastn[-1] is local[1], etc)
 // sp points to bottom of stack which grows up
 // returns:
@@ -130,6 +189,7 @@ mp_vm_return_kind_t mp_execute_bytecode(mp_code_state_t *code_state, volatile mp
     #define DISPATCH() do { \
         TRACE(ip); \
         MARK_EXC_IP_GLOBAL(); \
+        TRACE_TICK(ip, sp, false); \
         goto *entry_table[*ip++]; \
     } while (0)
     #define DISPATCH_WITH_PEND_EXC_CHECK() goto pending_exception_check
@@ -150,7 +210,46 @@ mp_vm_return_kind_t mp_execute_bytecode(mp_code_state_t *code_state, volatile mp
 
 #if MICROPY_STACKLESS
 run_code_state: ;
+#endif // MICROPY_STACKLESS
+FRAME_ENTER();
+
+#if MICROPY_PY_SYS_TRACE
+// Trace CALL event.
+if (!prof_is_executing && prof_trace_cb) {
+
+    mp_obj_frame_t *frame = MP_OBJ_TO_PTR(mp_obj_new_frame(code_state));
+    if (code_state->prev_state && code_state->frame == NULL) {
+
+        // The frame haven't been built for the newly entered code_state
+        // which means it's a CALL event (not a GENERATOR) so set the function definition line.
+        const mp_raw_code_t *rc = code_state->fun_bc->rc;
+        
+        frame->lineno = rc->line_of_definition;
+        if (!rc->line_of_definition) {
+            frame->lineno = prof_bytecode_lineno(rc, 0);
+        }
+    }
+    code_state->frame = MP_OBJ_FROM_PTR(frame);
+
+    prof_callback_args_t _args, *args=&_args;
+    args->frame = code_state->frame;
+    args->event = MP_ROM_QSTR(MP_QSTR_call);
+    args->arg = mp_const_none;
+
+    mp_obj_t top = prof_callback_invoke(prof_trace_cb, args);
+
+    code_state->frame->callback = mp_obj_is_callable(top) ? top : NULL;
+
+    // Invalidate the last executed line number so the LINE trace can trigger after this CALL.
+    frame->lineno = 0;
+}
 #endif
+
+#if MICROPY_STACKLESS
+run_code_state_from_return: ;
+#endif // MICROPY_STACKLESS
+FRAME_SETUP();
+
     // Pointers which are constant for particular invocation of mp_execute_bytecode()
     mp_obj_t * /*const*/ fastn;
     mp_exc_stack_t * /*const*/ exc_stack;
@@ -201,6 +300,7 @@ dispatch_loop:
 #else
                 TRACE(ip);
                 MARK_EXC_IP_GLOBAL();
+                TRACE_TICK(ip, sp, false);
                 switch (*ip++) {
 #endif
 
@@ -742,6 +842,13 @@ unwind_jump:;
                 }
 
                 ENTRY(MP_BC_FOR_ITER): {
+                    FRAME_SNAPSHOT();
+                    #if MICROPY_PY_SYS_TRACE
+                    // Trace trigger LINE for each iteration of complist.
+                    if (code_state->frame) {
+                        code_state->frame->lineno = 0;
+                    }
+                    #endif
                     MARK_EXC_IP_SELECTIVE();
                     DECODE_ULABEL; // the jump offset if iteration finishes; for labels are always forward
                     code_state->sp = sp;
@@ -900,6 +1007,7 @@ unwind_jump:;
                 }
 
                 ENTRY(MP_BC_CALL_FUNCTION): {
+                    FRAME_SNAPSHOT();
                     MARK_EXC_IP_SELECTIVE();
                     DECODE_UINT;
                     // unum & 0xff == n_positional
@@ -934,6 +1042,7 @@ unwind_jump:;
                 }
 
                 ENTRY(MP_BC_CALL_FUNCTION_VAR_KW): {
+                    FRAME_SNAPSHOT();
                     MARK_EXC_IP_SELECTIVE();
                     DECODE_UINT;
                     // unum & 0xff == n_positional
@@ -979,6 +1088,7 @@ unwind_jump:;
                 }
 
                 ENTRY(MP_BC_CALL_METHOD): {
+                    FRAME_SNAPSHOT();
                     MARK_EXC_IP_SELECTIVE();
                     DECODE_UINT;
                     // unum & 0xff == n_positional
@@ -1017,6 +1127,7 @@ unwind_jump:;
                 }
 
                 ENTRY(MP_BC_CALL_METHOD_VAR_KW): {
+                    FRAME_SNAPSHOT();
                     MARK_EXC_IP_SELECTIVE();
                     DECODE_UINT;
                     // unum & 0xff == n_positional
@@ -1115,9 +1226,10 @@ unwind_return:
                         #endif
                         code_state = new_code_state;
                         *code_state->sp = res;
-                        goto run_code_state;
+                        goto run_code_state_from_return;
                     }
                     #endif
+                    FRAME_LEAVE();
                     return MP_VM_RETURN_NORMAL;
 
                 ENTRY(MP_BC_RAISE_VARARGS): {
@@ -1155,6 +1267,7 @@ yield:
                     code_state->ip = ip;
                     code_state->sp = sp;
                     code_state->exc_sp = MP_TAGPTR_MAKE(exc_sp, currently_in_except_block);
+                    FRAME_LEAVE();
                     return MP_VM_RETURN_YIELD;
 
                 ENTRY(MP_BC_YIELD_FROM): {
@@ -1211,6 +1324,7 @@ yield:
                 }
 
                 ENTRY(MP_BC_IMPORT_NAME): {
+                    FRAME_SNAPSHOT();
                     MARK_EXC_IP_SELECTIVE();
                     DECODE_QSTR;
                     mp_obj_t obj = POP();
@@ -1219,6 +1333,7 @@ yield:
                 }
 
                 ENTRY(MP_BC_IMPORT_FROM): {
+                    FRAME_SNAPSHOT();
                     MARK_EXC_IP_SELECTIVE();
                     DECODE_QSTR;
                     mp_obj_t obj = mp_import_from(TOP(), qst);
@@ -1284,6 +1399,7 @@ yield:
                     mp_obj_t obj = mp_obj_new_exception_msg(&mp_type_NotImplementedError, "byte code not implemented");
                     nlr_pop();
                     fastn[0] = obj;
+                    FRAME_LEAVE();
                     return MP_VM_RETURN_EXCEPTION;
                 }
 
@@ -1372,6 +1488,25 @@ exception_handler:
                     }
                 }
             }
+
+            #if MICROPY_PY_SYS_TRACE
+            if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(((mp_obj_base_t*)nlr.ret_val)->type), MP_OBJ_FROM_PTR(&mp_type_Exception))) {
+                TRACE_TICK(code_state->ip, code_state->sp, true);
+            }
+            #endif
+
+            #if MICROPY_PY_SYS_UATEXIT
+            if (mp_obj_is_subclass_fast(MP_OBJ_FROM_PTR(((mp_obj_base_t*)nlr.ret_val)->type), MP_OBJ_FROM_PTR(&mp_type_SystemExit))) {
+                #if MICROPY_PY_SYS_TRACE
+                prof_settrace(mp_const_none);
+                #endif
+                if (mp_obj_is_callable(MP_STATE_VM(exitfunc))) {
+                    mp_obj_t exitfunc = MP_STATE_VM(exitfunc);
+                    MP_STATE_VM(exitfunc) = mp_const_none;
+                    mp_call_function_0(exitfunc);
+                }
+            }
+            #endif
 
 #if MICROPY_STACKLESS
 unwind_loop:
@@ -1477,6 +1612,7 @@ unwind_loop:
                 // propagate exception to higher level
                 // TODO what to do about ip and sp? they don't really make sense at this point
                 fastn[0] = MP_OBJ_FROM_PTR(nlr.ret_val); // must put exception here because sp is invalid
+                FRAME_LEAVE();
                 return MP_VM_RETURN_EXCEPTION;
             }
         }
