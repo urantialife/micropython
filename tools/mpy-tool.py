@@ -205,6 +205,17 @@ def mp_opcode_format(bytecode, ip, count_var_uint, opcode_format=make_opcode_for
     opcode = bytecode[ip]
     ip_start = ip
     f = (opcode_format[opcode >> 2] >> (2 * (opcode & 3))) & 3
+    extra_byte = (
+        opcode == MP_BC_RAISE_VARARGS
+        or opcode == MP_BC_MAKE_CLOSURE
+        or opcode == MP_BC_MAKE_CLOSURE_DEFARGS
+        or config.MICROPY_OPT_CACHE_MAP_LOOKUP_IN_BYTECODE and (
+            opcode == MP_BC_LOAD_NAME
+            or opcode == MP_BC_LOAD_GLOBAL
+            or opcode == MP_BC_LOAD_ATTR
+            or opcode == MP_BC_STORE_ATTR
+        )
+    )
     if f == MP_OPCODE_QSTR:
         if config.MICROPY_OPT_CACHE_MAP_LOOKUP_IN_BYTECODE:
             if (opcode == MP_BC_LOAD_NAME
