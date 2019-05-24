@@ -35,6 +35,13 @@
 #include "py/smallint.h"
 #include "py/runtime.h"
 
+#if MICROPY_PY_SYS_TRACE
+#include "py/objmodule.h"
+#include "py/profiling.h"
+
+STATIC mp_obj_t mp_sys_settrace(mp_obj_t obj);
+#endif
+
 #if MICROPY_PY_SYS
 
 // defined per port; type of these is irrelevant, just need pointer
@@ -146,6 +153,28 @@ STATIC mp_obj_t mp_sys_getsizeof(mp_obj_t obj) {
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(mp_sys_getsizeof_obj, mp_sys_getsizeof);
 #endif
 
+#if MICROPY_PY_SYS_UATEXIT
+// uatexit(callback): Callback is called when sys.exit is called.
+STATIC mp_obj_t mp_sys_uatexit(mp_obj_t obj) {
+    if (mp_obj_is_callable(obj)) {
+        MP_STATE_VM(exitfunc) = obj;
+    } else {
+        MP_STATE_VM(exitfunc) = mp_const_none;
+    }
+    return mp_const_none;
+}
+MP_DEFINE_CONST_FUN_OBJ_1(mp_sys_uatexit_obj, mp_sys_uatexit);
+#endif
+
+#if MICROPY_PY_SYS_TRACE
+// settrace(tracefunc): Set the system’s trace function.
+STATIC mp_obj_t mp_sys_settrace(mp_obj_t obj) {
+    return prof_settrace(obj);
+}
+MP_DEFINE_CONST_FUN_OBJ_1(mp_sys_settrace_obj, mp_sys_settrace);
+
+#endif // MICROPY_PY_SYS_TRACE
+
 STATIC const mp_rom_map_elem_t mp_module_sys_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_sys) },
 
@@ -178,6 +207,14 @@ STATIC const mp_rom_map_elem_t mp_module_sys_globals_table[] = {
 
     #if MICROPY_PY_SYS_EXIT
     { MP_ROM_QSTR(MP_QSTR_exit), MP_ROM_PTR(&mp_sys_exit_obj) },
+    #endif
+
+    #if MICROPY_PY_SYS_UATEXIT
+    { MP_ROM_QSTR(MP_QSTR_uatexit), MP_ROM_PTR(&mp_sys_uatexit_obj) },
+    #endif
+
+    #if MICROPY_PY_SYS_TRACE
+    { MP_ROM_QSTR(MP_QSTR_settrace), MP_ROM_PTR(&mp_sys_settrace_obj) },
     #endif
 
     #if MICROPY_PY_SYS_STDFILES
