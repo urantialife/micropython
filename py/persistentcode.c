@@ -404,13 +404,13 @@ STATIC mp_raw_code_t *load_raw_code(mp_reader_t *reader, qstr_window_t *qw) {
         ip2[2] = source_file; ip2[3] = source_file >> 8;
     }
 
+    // Number of entries in constant table
+    size_t n_obj = read_uint(reader, NULL);
+    size_t n_raw_code = read_uint(reader, NULL);
+
     mp_uint_t *const_table = NULL;
     if (kind != MP_CODE_NATIVE_ASM) {
         // Load constant table for bytecode, native and viper
-
-        // Number of entries in constant table
-        size_t n_obj = read_uint(reader, NULL);
-        size_t n_raw_code = read_uint(reader, NULL);
 
         // Allocate constant table
         size_t n_alloc = prelude.n_pos_args + prelude.n_kwonly_args + n_obj + n_raw_code;
@@ -626,6 +626,7 @@ STATIC void save_raw_code(mp_print_t *print, mp_raw_code_t *rc, qstr_window_t *q
 
         // Save bytecode
         save_bytecode(print, qstr_window, ip, ip_top);
+    #if MICROPY_EMIT_NATIVE || MICROPY_EMIT_INLINE_ASM
     } else {
         // Save native code
         mp_print_bytes(print, rc->fun_data, rc->fun_data_len);
@@ -654,6 +655,7 @@ STATIC void save_raw_code(mp_print_t *print, mp_raw_code_t *rc, qstr_window_t *q
                 mp_print_uint(print, rc->type_sig);
             }
         }
+    #endif
     }
 
     if (rc->kind == MP_CODE_BYTECODE || rc->kind == MP_CODE_NATIVE_PY) {
