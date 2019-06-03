@@ -539,9 +539,9 @@ const byte *prof_opcode_decode(const byte *ip, const mp_uint_t *const_table, mp_
 
 void prof_print_instr(const byte* ip, mp_code_state_t *code_state) {
     mp_dis_instruction_t _instruction, *instruction = &_instruction;
-    prof_opcode_decode(ip, code_state->fun_bc->rc->data.u_byte.const_table, instruction);
+    prof_opcode_decode(ip, code_state->fun_bc->rc->const_table, instruction);
     const mp_raw_code_t *rc = code_state->fun_bc->rc;
-    const mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
+    const mp_bytecode_prelude_t *prelude = &rc->prelude;
 
     mp_uint_t offset = (ip) - prelude->bytecode;
     mp_printf(&mp_plat_print, "instr");
@@ -585,7 +585,7 @@ void prof_print_instr(const byte* ip, mp_code_state_t *code_state) {
 #endif // PROF_PRINT_INSTR
 
 uint prof_bytecode_lineno(const mp_raw_code_t *rc, size_t bc) {
-    const mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
+    const mp_bytecode_prelude_t *prelude = &rc->prelude;
     const byte *ip = prelude->line_info;
     size_t source_line = 1;
     size_t c;
@@ -695,7 +695,7 @@ STATIC void code_print(const mp_print_t *print, mp_obj_t o_in, mp_print_kind_t k
     (void)kind;
     mp_obj_code_t *o = MP_OBJ_TO_PTR(o_in);
     const mp_raw_code_t *rc = o->rc;
-    const mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
+    const mp_bytecode_prelude_t *prelude = &rc->prelude;
     mp_printf(print,
         "<code object %q at 0x%p, file \"%q\", line %d>",
         prelude->qstr_block_name,
@@ -707,9 +707,9 @@ STATIC void code_print(const mp_print_t *print, mp_obj_t o_in, mp_print_kind_t k
 
 STATIC mp_obj_tuple_t* code_consts(const mp_raw_code_t *rc) {
 
-    const mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
-    int start = prelude->n_pos_args + prelude->n_kwonly_args + rc->data.u_byte.n_obj;
-    int stop  = prelude->n_pos_args + prelude->n_kwonly_args + rc->data.u_byte.n_obj + rc->data.u_byte.n_raw_code;
+    const mp_bytecode_prelude_t *prelude = &rc->prelude;
+    int start = prelude->n_pos_args + prelude->n_kwonly_args + rc->n_obj;
+    int stop  = prelude->n_pos_args + prelude->n_kwonly_args + rc->n_obj + rc->n_raw_code;
     mp_obj_tuple_t *consts = mp_obj_new_tuple(stop - start + 1, NULL);
     size_t const_no = 0;
     int i = 0;
@@ -717,19 +717,19 @@ STATIC mp_obj_tuple_t* code_consts(const mp_raw_code_t *rc) {
     // start = 0;
     // stop  = prelude->n_pos_args + prelude->n_kwonly_args;
     // for (i = start; i < stop; i++ ) {
-    //     consts->items[const_no++] = (mp_obj_t)rc->data.u_byte.const_table[i];
+    //     consts->items[const_no++] = (mp_obj_t)rc->const_table[i];
     // }
 
     // start = prelude->n_pos_args + prelude->n_kwonly_args;
-    // stop  = prelude->n_pos_args + prelude->n_kwonly_args + rc->data.u_byte.n_obj;
+    // stop  = prelude->n_pos_args + prelude->n_kwonly_args + rc->n_obj;
     // for (i = start; i < stop; i++ ) {
-    //     consts->items[const_no++] = (mp_obj_t)rc->data.u_byte.const_table[i];
+    //     consts->items[const_no++] = (mp_obj_t)rc->const_table[i];
     // }
 
-    // start = prelude->n_pos_args + prelude->n_kwonly_args + rc->data.u_byte.n_obj;
-    // stop  = prelude->n_pos_args + prelude->n_kwonly_args + rc->data.u_byte.n_obj + rc->data.u_byte.n_raw_code;
+    // start = prelude->n_pos_args + prelude->n_kwonly_args + rc->n_obj;
+    // stop  = prelude->n_pos_args + prelude->n_kwonly_args + rc->n_obj + rc->n_raw_code;
     for (i = start; i < stop; i++ ) {
-        consts->items[const_no++] = mp_obj_new_code((const mp_raw_code_t*)rc->data.u_byte.const_table[i]);
+        consts->items[const_no++] = mp_obj_new_code((const mp_raw_code_t*)rc->const_table[i]);
     }
 
     consts->items[const_no++] = mp_const_none;
@@ -738,9 +738,9 @@ STATIC mp_obj_tuple_t* code_consts(const mp_raw_code_t *rc) {
 }
 
 STATIC mp_obj_t raw_code_lnotab(const mp_raw_code_t *rc) {
-    // const mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
+    // const mp_bytecode_prelude_t *prelude = &rc->prelude;
     uint start = 0;
-    uint stop = rc->data.u_byte.bc_len - start;
+    uint stop = rc->fun_data_len - start;
 
     uint last_lineno = prof_bytecode_lineno(rc, start);
     uint lasti = 0;
@@ -790,12 +790,12 @@ STATIC void code_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     }
     mp_obj_code_t *o = MP_OBJ_TO_PTR(self_in);
     const mp_raw_code_t *rc = o->rc;
-    const mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
+    const mp_bytecode_prelude_t *prelude = &rc->prelude;
     switch(attr) {
         case MP_QSTR_co_code:
             dest[0] = mp_obj_new_bytes(
                 (void*)prelude->bytecode,
-                rc->data.u_byte.bc_len - (prelude->bytecode - rc->data.u_byte.bytecode)
+                rc->fun_data_len - (prelude->bytecode - (const byte*)rc->fun_data)
             );
             break;
         case MP_QSTR_co_consts:
@@ -848,7 +848,7 @@ STATIC void frame_print(const mp_print_t *print, mp_obj_t o_in, mp_print_kind_t 
     mp_obj_frame_t *frame = MP_OBJ_TO_PTR(o_in);
     mp_obj_code_t *code = frame->code;
     const mp_raw_code_t *rc = code->rc;
-    const mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
+    const mp_bytecode_prelude_t *prelude = &rc->prelude;
     mp_printf(print,
         "<frame at 0x%p, file '%q', line %d, code %q>",
         frame,
@@ -866,7 +866,7 @@ STATIC void frame_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
     mp_obj_frame_t *o = MP_OBJ_TO_PTR(self_in);;
     // mp_obj_code_t *code = o->code;
     // const mp_raw_code_t *rc = code->rc;
-    // const mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
+    // const mp_bytecode_prelude_t *prelude = &rc->prelude;
     switch(attr) {
         case MP_QSTR_f_back:
             dest[0] = mp_const_none;
@@ -902,7 +902,7 @@ mp_obj_t mp_obj_new_frame(const mp_code_state_t *code_state) {
     mp_obj_frame_t *o = m_new_obj(mp_obj_frame_t);
     mp_obj_code_t *code = o->code = mp_obj_new_code(code_state->fun_bc->rc);
     const mp_raw_code_t *rc = code->rc;
-    const mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
+    const mp_bytecode_prelude_t *prelude = &rc->prelude;
     o->code_state = code_state;
     o->base.type = &mp_type_frame;
     o->back = NULL;
@@ -928,7 +928,7 @@ mp_obj_t prof_update_frame(mp_obj_frame_t *frame, const mp_code_state_t *code_st
     mp_obj_frame_t *o = frame;
     mp_obj_code_t *code = o->code;
     const mp_raw_code_t *rc = code->rc;
-    const mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
+    const mp_bytecode_prelude_t *prelude = &rc->prelude;
     
     assert(o->code_state == code_state);
 
@@ -1002,7 +1002,7 @@ mp_obj_t prof_instr_tick(mp_code_state_t *code_state, bool isException) {
 
     // LINE
     const mp_raw_code_t *rc = code_state->fun_bc->rc;
-    const mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
+    const mp_bytecode_prelude_t *prelude = &rc->prelude;
     size_t prev_line_no = args->frame->lineno;
     size_t current_line_no = prof_bytecode_lineno(rc, code_state->ip - prelude->bytecode);
     if (prev_line_no != current_line_no) {

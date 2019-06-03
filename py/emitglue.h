@@ -85,6 +85,7 @@ typedef struct _mp_raw_code_t {
     uint16_t n_raw_code;
     #if MICROPY_PY_SYS_TRACE
     mp_bytecode_prelude_t prelude;
+    mp_uint_t line_of_definition;
     #endif
     #if MICROPY_EMIT_NATIVE || MICROPY_EMIT_INLINE_ASM
     uint16_t prelude_offset;
