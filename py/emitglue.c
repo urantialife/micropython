@@ -80,7 +80,7 @@ void mp_emit_glue_assign_bytecode(mp_raw_code_t *rc, const byte *code,
     #endif
     
     #if MICROPY_PY_SYS_TRACE
-    mp_bytecode_prelude_t *prelude = &rc->data.u_byte.prelude;
+    mp_bytecode_prelude_t *prelude = &rc->prelude;
     prof_extract_prelude(code, prelude);
     
     #if 0
