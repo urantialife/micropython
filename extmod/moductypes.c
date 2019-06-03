@@ -292,7 +292,6 @@ STATIC mp_obj_t uctypes_struct_sizeof(size_t n_args, const mp_obj_t *args) {
             layout_type = mp_obj_get_int(args[1]);
         }
     }
-    mp_uint_t max_field_size = 0;
     mp_uint_t size = uctypes_struct_size(obj_in, layout_type, &max_field_size);
     return MP_OBJ_NEW_SMALL_INT(size);
 }
