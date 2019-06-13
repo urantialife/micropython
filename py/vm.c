@@ -839,12 +839,6 @@ unwind_jump:;
 
                 ENTRY(MP_BC_FOR_ITER): {
                     FRAME_SNAPSHOT();
-                    #if MICROPY_PY_SYS_TRACE
-                    // Trace trigger LINE for each iteration of complist.
-                    if (code_state->frame) {
-                        code_state->frame->lineno = 0;
-                    }
-                    #endif
                     MARK_EXC_IP_SELECTIVE();
                     DECODE_ULABEL; // the jump offset if iteration finishes; for labels are always forward
                     code_state->sp = sp;
@@ -860,6 +854,12 @@ unwind_jump:;
                         ip += ulab; // jump to after for-block
                     } else {
                         PUSH(value); // push the next iteration value
+                        #if MICROPY_PY_SYS_TRACE
+                        // Trace trigger LINE for each iteration of complist.
+                        if (code_state->frame) {
+                            code_state->frame->lineno = 0;
+                        }
+                        #endif
                     }
                     DISPATCH();
                 }
