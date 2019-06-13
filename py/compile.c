@@ -1389,10 +1389,6 @@ done:
 STATIC void compile_while_stmt(compiler_t *comp, mp_parse_node_struct_t *pns) {
     START_BREAK_CONTINUE_BLOCK
 
-#if MICROPY_PY_SYS_TRACE
-    EMIT_ARG(set_source_line, pns->source_line);
-    EMIT_ARG(jump, continue_label);
-#endif
     if (!mp_parse_node_is_const_false(pns->nodes[0])) { // optimisation: don't emit anything for "while False"
         uint top_label = comp_next_label(comp);
         if (!mp_parse_node_is_const_true(pns->nodes[0])) { // optimisation: don't jump to cond for "while True"
