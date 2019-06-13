@@ -35,6 +35,7 @@
 #include "py/emitglue.h"
 #include "py/runtime.h"
 #include "py/bc0.h"
+#include "py/gc.h"
 
 #if PROF_PRINT_INSTR
 
@@ -347,6 +348,7 @@ const byte *prof_opcode_decode(const byte *ip, const mp_uint_t *const_table, mp_
             instruction->arg =unum;
             break;
 
+#if 0
         case MP_BC_POP_BLOCK:
             // pops block and restores the stack
             instruction->qstr_opname = MP_QSTR_POP_BLOCK;
@@ -356,7 +358,7 @@ const byte *prof_opcode_decode(const byte *ip, const mp_uint_t *const_table, mp_
             // pops block, checks it's an exception block, and restores the stack, saving the 3 exception values to local threadstate
             instruction->qstr_opname = MP_QSTR_POP_EXCEPT;
             break;
-
+#endif
         case MP_BC_BUILD_TUPLE:
             DECODE_UINT;
             instruction->qstr_opname = MP_QSTR_BUILD_TUPLE;
@@ -898,6 +900,12 @@ const mp_obj_type_t mp_type_frame = {
 };
 
 mp_obj_t mp_obj_new_frame(const mp_code_state_t *code_state) {
+
+    bool gc_is_locked_tmp = gc_is_locked();
+    if (gc_is_locked_tmp) {
+        gc_unlock();
+    }
+
     // mp_printf(&mp_plat_print, "new frame is building\n");
     mp_obj_frame_t *o = m_new_obj(mp_obj_frame_t);
     mp_obj_code_t *code = o->code = mp_obj_new_code(code_state->fun_bc->rc);
@@ -912,6 +920,11 @@ mp_obj_t mp_obj_new_frame(const mp_code_state_t *code_state) {
     o->lineno = prof_bytecode_lineno(rc, o->lasti);
     o->trace_opcodes = false;
     o->callback = NULL;
+
+    if (gc_is_locked_tmp) {
+        gc_lock();
+    }
+
     return MP_OBJ_FROM_PTR(o);
 }
 
@@ -934,7 +947,7 @@ mp_obj_t prof_update_frame(mp_obj_frame_t *frame, const mp_code_state_t *code_st
 
     o->lasti = code_state->ip - prelude->bytecode;
     o->lineno = prof_bytecode_lineno(rc, o->lasti);
-    
+
     return MP_OBJ_FROM_PTR(o);
 }
 
