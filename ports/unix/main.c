@@ -642,6 +642,14 @@ MP_NOINLINE int main_(int argc, char **argv) {
         }
     }
 
+    #if MICROPY_PY_SYS_UATEXIT
+    if (mp_obj_is_callable(MP_STATE_VM(exitfunc))) {
+        mp_obj_t exitfunc = MP_STATE_VM(exitfunc);
+        MP_STATE_VM(exitfunc) = mp_const_none;
+        mp_call_function_0(exitfunc);
+    }
+    #endif
+
     #if MICROPY_PY_MICROPYTHON_MEM_INFO
     if (mp_verbose_flag) {
         mp_micropython_mem_info(0, NULL);
