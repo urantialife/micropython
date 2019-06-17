@@ -57,7 +57,7 @@ def run_micropython(pyb, args, test_file, is_special=False):
     had_crash = False
     if pyb is None:
         # run on PC
-        if test_file.startswith(('cmdline/', 'feature_check/')) or test_file in special_tests:
+        if test_file.startswith(('cmdline/', 'feature_check/', 'unix/trace_')) or test_file in special_tests:
             # special handling for tests of the unix cmdline program
             is_special = True
 
