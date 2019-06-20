@@ -201,7 +201,6 @@ mp_obj_t mp_make_function_from_raw_code(const mp_raw_code_t *rc, mp_obj_t def_ar
             #if MICROPY_PY_SYS_TRACE
             mp_obj_fun_bc_t *self_fun = (mp_obj_fun_bc_t *)MP_OBJ_TO_PTR(fun);
             self_fun->rc = rc;
-            self_fun->line_of_definition = MP_OBJ_NEW_SMALL_INT(rc->line_of_definition);
             #endif
             
             break;

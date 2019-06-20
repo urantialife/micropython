@@ -85,6 +85,8 @@ typedef struct _mp_raw_code_t {
     uint16_t n_raw_code;
     #if MICROPY_PY_SYS_TRACE
     mp_bytecode_prelude_t prelude;
+    // Python source line where the raw_code was created e.g. MP_BC_MAKE_FUNCTION
+    // Required by the `call` trace event.
     mp_uint_t line_of_definition;
     #endif
     #if MICROPY_EMIT_NATIVE || MICROPY_EMIT_INLINE_ASM
