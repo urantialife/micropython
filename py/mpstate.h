@@ -256,7 +256,7 @@ typedef struct _mp_state_thread_t {
     bool prof_callback_is_executing;
     #endif // MICROPY_PY_SYS_TRACE
     #if MICROPY_ACCESS_CODE_STATE
-    struct _mp_code_state_t *prof_code_state;
+    struct _mp_code_state_t *current_code_state;
     #endif // MICROPY_ACCESS_CODE_STATE
 } mp_state_thread_t;
 

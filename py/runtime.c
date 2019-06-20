@@ -125,7 +125,7 @@ void mp_init(void) {
     #if MICROPY_PY_SYS_TRACE
     MP_STATE_THREAD(prof_trace_callback) = NULL;
     MP_STATE_THREAD(prof_callback_is_executing) = false;
-    MP_STATE_THREAD(prof_code_state) = NULL;
+    MP_STATE_THREAD(current_code_state) = NULL;
     #endif
 
     #if MICROPY_PY_THREAD_GIL

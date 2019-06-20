@@ -111,7 +111,7 @@
 
 #if MICROPY_ACCESS_CODE_STATE
 #define FRAME_SETUP() do { \
-    MP_STATE_THREAD(prof_code_state) = code_state; \
+    MP_STATE_THREAD(current_code_state) = code_state; \
 } while(0)
 #else
 #define FRAME_SETUP()
@@ -121,19 +121,19 @@
 
 #define FRAME_ENTER() do { \
     assert(code_state != code_state->prev_state); \
-    code_state->prev_state = MP_STATE_THREAD(prof_code_state); \
+    code_state->prev_state = MP_STATE_THREAD(current_code_state); \
     assert(code_state != code_state->prev_state); \
 } while(0)
 
 #define FRAME_LEAVE() do { \
     assert(code_state != code_state->prev_state); \
-    MP_STATE_THREAD(prof_code_state) = code_state->prev_state; \
+    MP_STATE_THREAD(current_code_state) = code_state->prev_state; \
     assert(code_state != code_state->prev_state); \
 } while(0)
 
 #define FRAME_SNAPSHOT() do { \
     assert(code_state != code_state->prev_state); \
-    assert(MP_STATE_THREAD(prof_code_state) == code_state); \
+    assert(MP_STATE_THREAD(current_code_state) == code_state); \
     if (!prof_is_executing) { \
         const byte *tmp_ip = code_state->ip; mp_obj_t *tmp_sp = code_state->sp; \
         code_state->ip = ip; code_state->sp = sp; \
@@ -150,7 +150,7 @@
 
 #define TRACE_TICK(cIp, cSp, isException) do { \
     assert(code_state != code_state->prev_state); \
-    assert(MP_STATE_THREAD(prof_code_state) == code_state); \
+    assert(MP_STATE_THREAD(current_code_state) == code_state); \
     if (!prof_is_executing && code_state->frame && code_state->frame->callback) { \
         PRINT_INSTR(code_state->ip); \
         const byte *tmp_ip = code_state->ip; mp_obj_t *tmp_sp = code_state->sp; \
